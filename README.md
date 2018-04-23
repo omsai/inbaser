@@ -1,9 +1,9 @@
 [![travis](https://travis-ci.org/omsai/inbaser.svg?branch=master)](https://travis-ci.org/omsai/inbaser)
 [![coverage](https://codecov.io/gh/omsai/inbaser/branch/master/graphs/badge.svg)](https://codecov.io/gh/omsai/inbaser)
 
-# InteinR
+# InBaseR
 
-InteinR provides convenient `inbase` and `inbase_seq` data objects for
+InBaseR provides convenient `inbase` and `inbase_seq` data objects for
 the 585 inteins in the
 unmaintained [inteins.com](http://www.inteins.com) InBase
 database. The protein sequences are available as AAStringSet objects
@@ -12,7 +12,7 @@ metadata.
 
 ## Installation
 
-You can install the development version of inteinr from [GitHub](https://github.com/) with:
+You can install the development version of inbaser from [GitHub](https://github.com/) with:
 
 ``` r
 # install.packages("devtools")

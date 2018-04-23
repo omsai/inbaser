@@ -1,4 +1,4 @@
 library(testthat)
-library(inteinr)
+library(inbaser)
 
-test_check("inteinr")
+test_check("inbaser")
