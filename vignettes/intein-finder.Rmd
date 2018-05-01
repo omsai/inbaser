@@ -1,0 +1,399 @@
+---
+title: "Find inteins in genome"
+author: "Pariksheet Nanda"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: TRUE
+    <!-- toc_float: TRUE -->
+    theme: cerulean
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Fetch InBase Archaea
+
+Extract Archaea intein sequences
+
+```{r Subset InBase to archaea}
+suppressPackageStartupMessages({
+    library(tibble)        # Load data as tibble instead of data.frame
+    library(inbaser)
+
+    library(Biostrings)                 # readAAStringSet, writeAAStringSet
+
+    library(dplyr)                      # %>%
+    library(tidyr)                      # gather
+    library(stringr)                    # str_remove
+})
+
+data(inbase)
+
+## Add row numbers to make it possible to subset ibase_seq.
+inbase <- inbase %>%
+    mutate(i = row_number())
+
+## Motifs.
+all_endo <- c("C", "D", "E", "H")
+## Having all 4 splicing domains is criterion #3 per inbase.com intein
+## designation.
+blocks <-
+    inbase %>%
+    ## Gather also removes the NA values.
+    gather("Block", "Sequence", starts_with("Block")) %>%
+    select(Sequence, everything()) %>%
+    ## Set "None" values to NA
+    mutate(Sequence = ifelse(str_detect(Sequence, "(None|[-]+)"),
+                             NA, Sequence)) %>%
+    mutate(Block = str_remove(Block, "Block ")) %>%
+    mutate(has_endo = Block %in% all_endo) %>%
+    select(i, Block, Sequence, has_endo, everything()) %>%
+    arrange(i) %>%
+    group_by(i) %>%
+    summarize(has_endo = sum(! is.na(Sequence) & has_endo))  %>%
+    filter(has_endo == max(has_endo))
+
+## Subset to archaea.
+archaea <- inbase %>%
+    inner_join(blocks, by = "i") %>%
+    filter(`Domain of Life` == "Archaea")
+
+## Get corresponding sequences.
+seq <- inbase_seq[archaea %>% pull(i)]
+```
+
+Export the protein sequences and run the alignment on the cluster in
+`psi-blast.sh`:
+
+```{r Export original sequences to run PSI-BLAST, eval = FALSE}
+writeXStringSet(seq, "archaea_inteins.faa")
+```
+
+## Train PSI-blast matrix using NR
+
+The NR database on the [BBC server]() is located in `/common/blast/data/`.
+Note the `-num_iterations 0` feature of psiblast that auto-calculates
+the matrix optimal iteration value.
+
+Script `psiblast-train.sh` to train PSI-BLAST weight matrix:
+
+```{sh, eval = FALSE}
+#!/bin/bash
+
+# Blast against non-redundant database
+prefix_database=/common/blast/data/nr
+# Only Blast against these all Archaea proteins in the database
+file_subject=archaea.gi
+
+# Archaea inteins
+file_query_raw=archaea_inteins.faa
+file_query=${file_query_raw%.faa}.msa
+if ! [[ -f $file_query ]]; then
+    muscle -in $file_query_raw  -out $file_query
+fi
+
+psiblast \
+    -num_threads `nproc` \
+    -num_iterations 0 \
+    -in_msa $file_query \
+    -db $prefix_database \
+    -gilist $file_subject \
+    -outfmt 7 \
+    -out out.blast-train \
+    -out_pssm out.pssm
+```
+
+The search converges with a 1.25 hour wall time and our position matrix is saved to `out.pssm`.
+
+Job output in `out.qsub-train`:
+
+```
+Job ID   : 790294
+Date     : Wed Apr 18 15:08:00 EDT 2018
+Script   : /opt/gridengine/default/spool/compute-1-7/job_scripts/790294
+Queue    : course.q
+Par Env  :
+psiblast: /lib64/libz.so.1: no version information available (required by psiblast)
+Warning: [psiblast] lcl|1: Warning: Composition-based score adjustment conditioned on sequence properties and unconditional composition-based score adjustment is not supported with PSSMs, resetting to default value of standard composition-based statistics
+        Command being timed: "bash psiblast-train.sh"
+        User time (seconds): 16542.95
+        System time (seconds): 243.25
+        Percent of CPU this job got: 368%
+        Elapsed (wall clock) time (h:mm:ss or m:ss): 1:15:52
+        Average shared text size (kbytes): 0
+        Average unshared data size (kbytes): 0
+        Average stack size (kbytes): 0
+        Average total size (kbytes): 0
+        Maximum resident set size (kbytes): 3816192
+        Average resident set size (kbytes): 0
+        Major (requiring I/O) page faults: 2971
+        Minor (reclaiming a frame) page faults: 116847626
+        Voluntary context switches: 1144313
+        Involuntary context switches: 108241
+        Swaps: 0
+        File system inputs: 71666856
+        File system outputs: 339064
+        Socket messages sent: 0
+        Socket messages received: 0
+        Signals delivered: 0
+        Page size (bytes): 4096
+        Exit status: 0
+```
+
+Job submission script `train.qsub`:
+
+```{sh, eval = FALSE}
+#!/usr/bin/env bash
+#$ -N psiblast_train
+#$ -q course.q
+#$ -o out.qsub-train
+#$ -j yes
+#$ -S /bin/bash
+#$ -cwd
+#$ -M NAME.REDACTED@uconn.edu
+#$ -m ea
+# ^ Directives for Sun Grid Engine.
+
+# Clear output file.
+echo -n > out.qsub-train
+
+# Job information.
+echo "
+Job ID=: $JOB_ID
+Date=: $(date)
+Script=: $JOB_SCRIPT
+Queue=: $QUEUE
+Par Env=: $PE
+" | column -t -s '='
+
+# Load psiblast software module.
+module purge
+module load blast/2.6.0
+
+# Run psiblast.
+command time -v bash psiblast-train.sh
+```
+
+## Run PSI-blast against NR
+
+Script `psiblast-run.sh` uses PSI-BLAST weight matrix to return
+proteins containing inteins:
+
+```
+#!/bin/bash
+
+# Blast against non-redundant database
+prefix_database=/common/blast/data/nr
+# Only Blast against these all Archaea proteins in the database
+file_subject=archaea.gi
+
+psiblast \
+    -num_threads `nproc` \
+    -in_pssm out.pssm \
+    -db $prefix_database \
+    -gilist $file_subject \
+    -outfmt 7 \
+    -out out.blast-run
+```
+
+The run only takes a minute per `out.qsub-run`:
+
+```
+Job ID   : 790767
+Date     : Mon Apr 30 12:55:14 EDT 2018
+Script   : /opt/gridengine/default/spool/compute-1-9/job_scripts/790767
+Queue    : course.q
+Par Env  :
+psiblast: /lib64/libz.so.1: no version information available (required by psiblast)
+Warning: [psiblast] lcl|1: Warning: Composition-based score adjustment conditioned on sequence properties and unconditional composition-based score adjustment is not supported with PSSMs, resetting to default value of standard composition-based statistics
+        Command being timed: "bash psiblast-run.sh"
+        User time (seconds): 62.29
+        System time (seconds): 16.20
+        Percent of CPU this job got: 20%
+        Elapsed (wall clock) time (h:mm:ss or m:ss): 6:30.30
+        Average shared text size (kbytes): 0
+        Average unshared data size (kbytes): 0
+        Average stack size (kbytes): 0
+        Average total size (kbytes): 0
+        Maximum resident set size (kbytes): 2578592
+        Average resident set size (kbytes): 0
+        Major (requiring I/O) page faults: 2835
+        Minor (reclaiming a frame) page faults: 670392
+        Voluntary context switches: 88741
+        Involuntary context switches: 108333
+        Swaps: 0
+        File system inputs: 65933576
+        File system outputs: 144
+        Socket messages sent: 0
+        Socket messages received: 0
+        Signals delivered: 0
+        Page size (bytes): 4096
+        Exit status: 0
+```
+
+## Read in blast results table
+
+```{r Read in results table, results = "asis"}
+library(readr)
+library(stringr)
+library(DT)                             # datatable
+
+header <- read_lines("out.blast-run", skip = 4, n_max = 1) %>%
+    str_remove("^# Fields: ") %>%
+    str_split(", ", simplify = TRUE) %>%
+    str_replace("%", "percent") %>%
+    str_replace_all("[ .]+", "_")
+tbl <- read_delim("out.blast-run", "\t", col_names = header, comment = "#") %>%
+    select(-query_acc_ver)
+
+## Print paginated table.
+datatable(tbl)
+```
+
+## Find proteins which do not have the intein
+
+Now that we have proteins with the intein, find a corresponding
+protein sequence with the intein removed.  Remove the intein and run
+BLAST on the removed sequences.
+
+We can save our list of accessions to query from the database.
+
+```{r Save list of accessions to retrieve protein sequence}
+tbl %>%
+    pull(subject_acc_ver) %>%
+    ## By default, psiblast returns max 500 results, and many of the
+    ## subject results are duplicated.
+    unique() %>%
+    tibble::as.tibble() %>%
+    write_csv("inteins_putative.accessions", col_names = FALSE)
+```
+
+Query the sequences from the database using `blastdbcmd` as shown in
+this file `blastdbcmd-sequences.sh`.  This is quick and only takes
+a few seconds:
+
+```{sh, eval = FALSE}
+#!/bin/bash
+
+# Blast against non-redundant database
+prefix_database=/common/blast/data/nr
+file_entry=inteins_putative.accessions
+file_seq=${file_entry%.accessions}.faa
+
+blastdbcmd \
+    -entry_batch $file_entry \
+    -db $prefix_database \
+    -out $file_seq
+```
+
+Read the proteins back into R to remove the intein segments.
+
+```{r Read in proteins with an intein}
+proteins_with_intein <- readAAStringSet("inteins_putative.faa")
+```
+
+## Discovered multiple hits for the same protein
+
+```{r Found multiple hits}
+library(ggplot2)
+
+counts <-
+    tbl %>%
+    add_count(subject_acc_ver) %>%
+    select(n, everything()) %>%
+    arrange(desc(n))
+
+ggplot(counts %>% group_by(subject_acc_ver) %>% top_n(1),
+       aes(x = n)) +
+    stat_bin(bins = max(counts$n)) +
+    stat_bin(aes(label = ..count..), geom = "text", vjust = -0.5,
+             bins = max(counts$n)) +
+    labs(title = sprintf("Duplication of hits (total = %d, unique = %d)", nrow(tbl), length(unique(tbl$subject_acc_ver))),
+         x = "duplicate hits")
+```
+
+Dyanna suggested one strategy for removing duplicate results is
+removing results with low alignment length values:
+
+```{r}
+alignment_length_cutoff <- width(seq) %>% min() * 0.9
+ggplot(counts %>% mutate(keep = alignment_length >= alignment_length_cutoff),
+       aes(x = alignment_length, fill = keep)) +
+    geom_histogram(binwidth = 10) +
+    ## FIXME: In future relax this 90% minimum length threshold and
+    ## confirm the intein is in the 
+    geom_vline(xintercept = alignment_length_cutoff) +
+    labs(title = "Using 80% minimum alignment length to remove extra hits",
+         x = "alignment length in nucleotides, not amino acids!",
+         fill = "keep hit?") +
+    facet_wrap(~ n) +
+    theme(legend.position = "top")
+```
+
+Filter hits by the alignment length:
+
+```{r Filter hits by alignment length}
+hits <- counts %>%
+    filter(alignment_length >= alignment_length_cutoff)
+hits
+```
+
+## Remove intein from protein hits
+
+```{r Remove inteins from protein hits}
+## The NR naming always puts the accession identifier as the first
+## word and the description separated by a space.  To be able to match
+## up the names with our blast results, only keep the accession
+## identifier and remove the description.
+names(proteins_with_intein) <- names(proteins_with_intein) %>%
+    str_remove(" .+")
+proteins_without_intein <- proteins_with_intein[hits %>% pull(subject_acc_ver)]
+subseq(proteins_without_intein,
+       start = hits %>% pull(s_start),
+       end = hits %>% pull(s_end)) <- NULL
+names(proteins_without_intein) <- paste0(names(proteins_without_intein),
+                                         "_delta_",
+                                         hits %>% pull(s_start),
+                                         "-",
+                                         hits %>% pull(s_end))
+writeXStringSet(proteins_without_intein, "proteins_intein_free.faa")
+```
+
+## Blastp inteins-free protein hits to find non-intein proteins
+
+Use our intein-free protein to find whether we can get better results
+than the original protein.
+
+```{sh, eval = FALSE}
+#!/bin/bash
+
+# Blast against non-redundant database
+prefix_database=/common/blast/data/nr
+# Blast all intein-free proteins
+file_query=proteins_intein_free.faa
+# Only Blast against these all Archaea proteins in the database
+file_subject=archaea.gi
+
+blastp \
+    -num_threads `nproc` \
+    -query $file_query \
+    -db $prefix_database \
+    -gilist $file_subject \
+    -outfmt 7 \
+    -out out.blast-intein-free
+```
+
+## Session Info
+
+```{r Session Info}
+sessionInfo()
+```

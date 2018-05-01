@@ -1,5 +1,16 @@
+# R
 .Rproj.user
 .Rhistory
 .RData
+
+# Emacs
+*~
+
+# Data
 data-raw/inbase.csv
 data-raw/inbase.faa
+
+# Vignette generated
+inst/doc
+vignettes/*.html
+vignettes/archaea_inteins.faa
