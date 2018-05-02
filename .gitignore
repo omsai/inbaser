@@ -16,6 +16,8 @@ docs/
 # Vignette generated
 inst/doc
 vignettes/*.html
+vignettes/intein-finder_files/
+vignettes/intein-finder_cache/
 vignettes/archaea_inteins.faa
 vignettes/inteins_putative.accessions
 vignettes/proteins_intein_free.faa

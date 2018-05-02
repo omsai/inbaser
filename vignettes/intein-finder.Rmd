@@ -1,5 +1,5 @@
 ---
-title: "Find inteins in genome"
+title: "Find all inteins in Archaea genomes"
 author: "Pariksheet Nanda"
 date: "`r Sys.Date()`"
 output:
@@ -18,6 +18,21 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
+```
+
+## Background
+
+The project goal is to identify new inteins in silico.
+In general the approach is to:
+
+1. Find distant intein homologs using PSI-BLAST.
+2. Remove the intein sequences from the homologs, and query BLASTP to
+   verify that there are versions of the protein not invaded by the intein.
+
+The is illustrated in slightly more detail in the workflow below:
+
+```{r Workflow overview, echo = FALSE, out.width = "50%"}
+knitr::include_graphics("algo.png")
 ```
 
 ## Fetch InBase Archaea
@@ -395,7 +410,7 @@ blastp \
     -out out.blast-intein-free
 ```
 
-```{r Get top hits from results}
+```{r Get top hits from results, cache = TRUE}
 hits_all <- read_blast("out.blast-intein-free.bz2")
 
 hits_top <- hits_all %>%
