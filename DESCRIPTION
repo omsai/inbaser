@@ -25,5 +25,7 @@ Suggests:
     tibble,
     tidyr
 Imports: Biostrings
-Remotes: bioc::Biostrings
+Remotes:
+    bioc::Biostrings,
+    rstudio/DT
 VignetteBuilder: knitr
