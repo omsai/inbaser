@@ -14,3 +14,5 @@ data-raw/inbase.faa
 inst/doc
 vignettes/*.html
 vignettes/archaea_inteins.faa
+vignettes/inteins_putative.accessions
+vignettes/proteins_intein_free.faa
