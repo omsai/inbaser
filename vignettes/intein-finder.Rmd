@@ -247,14 +247,17 @@ library(readr)
 library(stringr)
 library(DT)                             # datatable
 
-header <- read_lines("out.blast-run", skip = 4, n_max = 1) %>%
-    str_remove("^# Fields: ") %>%
-    str_split(", ", simplify = TRUE) %>%
-    str_replace("%", "percent") %>%
-    str_replace_all("[ .]+", "_")
-tbl <- read_delim("out.blast-run", "\t", col_names = header, comment = "#") %>%
+read_blast <- function(file, ...) {
+    header <- read_lines("out.blast-run", skip = 4, n_max = 1) %>%
+        str_remove("^# Fields: ") %>%
+            str_split(", ", simplify = TRUE) %>%
+            str_replace("%", "percent") %>%
+            str_replace_all("[ .]+", "_")
+    read_delim(file, "\t", col_names = header, comment = "#", ...)
+}
+tbl <- read_blast("out.blast-run")%>%
     select(-query_acc_ver)
-
+    
 ## Print paginated table.
 datatable(tbl)
 ```
@@ -390,6 +393,25 @@ blastp \
     -gilist $file_subject \
     -outfmt 7 \
     -out out.blast-intein-free
+```
+
+```{r Get top hits from results}
+hits_all <- read_blast("out.blast-intein-free.bz2")
+
+hits_top <- hits_all %>%
+    mutate(query_orig = str_remove(query_acc_ver, "_delta_.+")) %>%
+    select(query_orig, subject_acc_ver, everything()) %>%
+    ## Drop self-hits.
+    filter(subject_acc_ver != query_orig) %>%
+    ## Quality filter.
+    filter(evalue < 1e-5) %>%
+    ## Top hits.
+    group_by(query_orig, subject_acc_ver) %>%
+    top_n(1, bit_score)
+
+ggplot(hits_top %>% add_count(query_orig), aes(n)) +
+    geom_histogram() +
+    scale_y_log10()
 ```
 
 ## Session Info
