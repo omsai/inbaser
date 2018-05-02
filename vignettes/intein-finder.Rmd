@@ -188,7 +188,7 @@ command time -v bash psiblast-train.sh
 Script `psiblast-run.sh` uses PSI-BLAST weight matrix to return
 proteins containing inteins:
 
-```
+```{sh, eval = FALSE}
 #!/bin/bash
 
 # Blast against non-redundant database
