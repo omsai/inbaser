@@ -10,6 +10,7 @@ Description: InBaseR provides convenient inbase and inbase_seq data objects for
     nothing else is changed from the InBase metadata.
 Depends: R (>= 3.4.0)
 License: Artistic-2.0
+BugReports: https://github.com/omsai/inbaser/issues
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 6.0.1
