@@ -8,7 +8,7 @@ Description: InBaseR provides convenient inbase and inbase_seq data objects for
     the 585 inteins in the unmaintained inteins.com InBase database. The protein
     sequences are available as AAStringSet objects in inbase_seq, but otherwise
     nothing else is changed from the InBase metadata.
-Depends: R (>= 3.4.1)
+Depends: R (>= 3.4.0)
 License: Artistic-2.0
 Encoding: UTF-8
 LazyData: true
