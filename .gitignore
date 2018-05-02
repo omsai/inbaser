@@ -10,6 +10,9 @@
 data-raw/inbase.csv
 data-raw/inbase.faa
 
+# pkgdown website
+docs/
+
 # Vignette generated
 inst/doc
 vignettes/*.html
