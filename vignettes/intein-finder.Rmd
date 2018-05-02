@@ -20,7 +20,9 @@ knitr::opts_chunk$set(
 )
 ```
 
-## Background
+# Background
+
+## Project goal
 
 The project goal is to identify new inteins in silico.
 In general the approach is to:
@@ -34,6 +36,24 @@ The is illustrated in slightly more detail in the workflow below:
 ```{r Workflow overview, echo = FALSE, out.width = "50%"}
 knitr::include_graphics("algo.png")
 ```
+
+## Inteins
+
+Below is an image from the [inteins.com](inteins.com) intein registry.
+
+[![Intein domains](http://www.biocenter.helsinki.fi/bi/iwai/InBase/tools.neb.com/inbase/blocks.gif)](http://www.biocenter.helsinki.fi/bi/iwai/InBase/tools.neb.com/inbase/motifs_splice.html)
+
+## Further work
+
+Focus on identifying splicing domains (A, B, F, G) and homing
+endonucleases (C, D, E, H); not necessarily all the annotated domains
+which have lots of variation.
+
+Then do a phylogeny of the homing endonucleases and see if they are
+really vertically inherited or see if they horizontally jump back and
+forth and are the basis of some phylogenies.
+
+# Find putative intein containing proteins
 
 ## Fetch InBase Archaea
 
@@ -255,7 +275,9 @@ Warning: [psiblast] lcl|1: Warning: Composition-based score adjustment condition
         Exit status: 0
 ```
 
-## Read in blast results table
+# Find corresponding uninvaded proteins
+
+## Read in PSI-BLAST results table
 
 ```{r Read in results table, results = "asis"}
 library(readr)
@@ -277,7 +299,7 @@ tbl <- read_blast("out.blast-run")%>%
 datatable(tbl)
 ```
 
-## Find proteins which do not have the intein
+## Find uninvaded proteins which do not have the intein
 
 Now that we have proteins with the intein, find a corresponding
 protein sequence with the intein removed.  Remove the intein and run
@@ -386,7 +408,7 @@ names(proteins_without_intein) <- paste0(names(proteins_without_intein),
 writeXStringSet(proteins_without_intein, "proteins_intein_free.faa")
 ```
 
-## Blastp inteins-free protein hits to find non-intein proteins
+## Blastp intein-free protein hits to find non-intein proteins
 
 Use our intein-free protein to find whether we can get better results
 than the original protein.
@@ -429,7 +451,9 @@ ggplot(hits_top %>% add_count(query_orig), aes(n)) +
     scale_y_log10()
 ```
 
-## Session Info
+# Verify whether intein-containing protein has uninvaded homolog
+
+# Session Info
 
 ```{r Session Info}
 sessionInfo()
