@@ -364,7 +364,7 @@ ggplot(counts %>% group_by(subject_acc_ver) %>% top_n(1),
 Dyanna suggested one strategy for removing duplicate results is
 removing results with low alignment length values:
 
-```{r}
+```{r Inspect how alignment filter affects multiple hits}
 alignment_length_cutoff <- width(seq) %>% min() * 0.9
 ggplot(counts %>% mutate(keep = alignment_length >= alignment_length_cutoff),
        aes(x = alignment_length, fill = keep)) +
@@ -384,7 +384,7 @@ Filter hits by the alignment length:
 ```{r Filter hits by alignment length}
 hits <- counts %>%
     filter(alignment_length >= alignment_length_cutoff)
-hits
+datatable(hits)
 ```
 
 ## Remove intein from protein hits
@@ -444,10 +444,20 @@ hits_top <- hits_all %>%
     filter(evalue < 1e-5) %>%
     ## Top hits.
     group_by(query_orig, subject_acc_ver) %>%
-    top_n(1, bit_score)
+    top_n(1, bit_score) %>%
+    add_count(query_orig)
+```
 
-ggplot(hits_top %>% add_count(query_orig), aes(n)) +
-    geom_histogram() +
+```{r Show top hits}
+## The dataframe is quite large, so only show a small portion.
+nrow(hits_top)
+datatable(hits_top %>% head(1e3))
+ggplot(hits_top, aes(n)) +
+    stat_bin(bins = max(hits_top$n)) +
+    stat_bin(aes(label = ..count..), geom = "text", vjust = -0.5,
+             bins = max(hits_top$n)) +
+    ## Show all ticks, not just 2, 4, 6.
+    scale_x_continuous(breaks = 1:max(hits_top$n)) +
     scale_y_log10()
 ```
 
