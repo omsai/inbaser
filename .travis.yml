@@ -11,7 +11,7 @@ r_github_packages:
   - r-lib/pkgdown
 after_success:
   - Rscript -e 'covr::codecov()'
-  - Rscript -e 'pkgdown::build_site()'
+  - Rscript -e 'devtools::install(); pkgdown::build_site()'
 deploy:
   provider: pages
   skip-cleanup: true
